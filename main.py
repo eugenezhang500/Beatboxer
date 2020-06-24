@@ -1,5 +1,6 @@
 '''BEATBOXER'''
 
+#To revert Beatboxer Testing main.py to Beatboxer main.py, get rid of 'Beta Testing' while defining the 'version' variable and replace "|" with "|"
 
 import discord
 import signal
@@ -7,10 +8,13 @@ import time
 import random
 import math
 import sys
+from discord.ext import tasks
+
+print(sys.version)
 
 #id = 536306191421145110
 
-version = '0.1.3'
+version = '0.1.4'
 
 def read_token():
     with open("beatboxertoken.txt", "r") as f:
@@ -23,34 +27,24 @@ client = discord.Client()
 
 with open('currency', 'r') as f:
     discs = eval(f.read())
-
 with open('daily_timestamps', 'r') as f:
     daily = eval(f.read())
-
 with open('work_timestamps', 'r') as f:
     work = eval(f.read())
-
 with open('users_jobs', 'r') as f:
     job = eval(f.read())
-
 with open('quit_job_timestamps', 'r') as f:
     quit = eval(f.read())
-
 with open('salary_per_user', 'r') as f:
     salary = eval(f.read())
-
 with open('fire_timestamps', 'r') as f:
     fire = eval(f.read())
-
 with open('parent_timestamps', 'r') as f:
     parent = eval(f.read())
-
 with open('users_pet', 'r') as f:
     pet = eval(f.read())
-
 with open('pet_disown_timestamps', 'r') as f:
     disown = eval(f.read())
-
 with open('search_timestamps', 'r') as f:
     search = eval(f.read())
 
@@ -69,17 +63,19 @@ def setwork(user, new_work_timestamp):
 
 def getjob(user):
     try:
-        return job[user][0], job[user][1]
+        return job[user][0], job[user][1], job[user][2]
     except KeyError:
-        job[user] = [0,0]
-        return job[user][0], job[user][1]
+        job[user] = [0,0,0]
+        return job[user][0], job[user][1], job[user][2]
 
-def setjob(user, new_job=None, number_of_hours=None):
+def setjob(user, new_job=None, number_of_hours=None, new_maximum=None):
     if new_job is None:
         new_job = getjob(user)[0]
     if number_of_hours is None:
         number_of_hours = getjob(user)[1]
-    job[user] = [new_job, number_of_hours]
+    if new_maximum is None:
+        new_maximum = getjob(user)[2]
+    job[user] = [new_job, number_of_hours, new_maximum]
 
 def getsalary(user):
     try:
@@ -178,13 +174,28 @@ def terminate_handler(signal, frame):
     sys.exit(0)
 signal.signal(signal.SIGINT, terminate_handler)
 
+async def reset_job_today():
+    await client.wait_until_ready()
+    while not client.is_closed:
+        if time.time()%84600 == 0:
+            await asyncio.sleep(84600)
+            for user, data in job.items():
+                job[user][1] = 0
+
 @client.event
 async def on_ready():
     channel = client.get_channel(713162380338659426)
     await client.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name="'Phenomonal Loop' on YouTube: https://www.youtube.com/channel /UChAvZlXVfJGSg0tgd9l7GzQ"))
     print('Successfully logged in and online')
     await channel.send(f'Bot booted up and running. **Version {version}**.')
-    #I am SUCH A GENIUS!!!
+
+@client.event
+async def on_member_update(before, after):
+    if len(before.roles) < len(after.roles):
+        newRole = next(role for role in after.roles if role not in before.roles)
+        channel = client.get_channel(649833392854007808)
+        print(f"""Recognized that {after.name} has been promoted to {newRole.name}""")
+        await channel.send(f"""Congratulations {after.mention} for getting promoted to **{newRole.name}**!!""")
 
 @client.event
 async def on_member_join(member):
@@ -265,10 +276,10 @@ async def on_message(message):
                 await message.channel.send("Wassup, how's the vibing?")
        
         elif message.content == "|users":
-            await message.channel.send(f"""# of members: {guild_id.member_count}""")
+            await message.channel.send(f"""# of members: **{guild_id.member_count}**""")
        
         elif message.content.startswith('|say'):
-            await message.channel.send(message.content[5:])
+            await message.channel.send(message.content[6:])
        
         elif message.content.startswith ('|bal' or '|balance'):
             embed = discord.Embed(title = 'Your balance', color = 0x38b328)
@@ -301,16 +312,16 @@ async def on_message(message):
         
         elif message.content == '|jobs':
             embed = discord.Embed(title='Job list in Beatboxer Currency:', discription='You may choose one job by typing "|work *job*". You may work once per hour.', color=0xff8928)
-            embed.add_field(name='Fast Food Worker', value='850 Discs/hr, 1 hr/day required') # 1
-            embed.add_field(name='Firefighter', value='945 Discs/hr, 1 hr/day required') # 2
-            embed.add_field(name='Prostitute', value='180 Discs/hr, 8 hr/day required') # 3
-            embed.add_field(name='Nuclear Scientist', value='2150 Discs/hr, 4 hr/day required') # 4
-            embed.add_field(name='COVID-19 Analyst', value='2325 Discs/hr, 6 hr/day required') # 5
+            embed.add_field(name='Fast Food Worker', value='850 Discs/hr, 2 hr/day maximum') # 1
+            embed.add_field(name='Firefighter', value='945 Discs/hr, 3 hr/day maximum') # 2
+            embed.add_field(name='Architect', value='1650 Discs/hr, 4 hr/day maximum') # 3
+            embed.add_field(name='Nuclear Scientist', value='2150 Discs/hr, 5 hr/day maximum') # 4
+            embed.add_field(name='COVID-19 Analyst', value='2325 Discs/hr, 6 hr/day maximum') # 5
             await message.channel.send(embed=embed)
         
         elif message.content.lower() == '|work fast food worker':
             if getjob(user)[0] == 0 and getquit(user) < time.time():
-                setjob(user, 1, 0)
+                setjob(user, 1, 0, 2)
                 setsalary(user, 850)
                 await message.channel.send("Congratulations! You are now working as a fast food worker!")
             elif getjob(user)[0] != 0:
@@ -320,7 +331,7 @@ async def on_message(message):
 
         elif message.content.lower() == '|work firefighter':
             if getjob(user)[0] == 0 and getquit(user) < time.time():
-                setjob(user, 2, 0)
+                setjob(user, 2, 0, 3)
                 setsalary(user, 945)
                 await message.channel.send("Congratulations! You are now working as a firefighter!")
             elif getjob(user)[0] != 0:
@@ -328,11 +339,11 @@ async def on_message(message):
             elif getquit(user) > time.time():
                 await message.channel.send(f"""Nonononono, you cannot apply for a job for another **{int((quit[user]-time.time())/60)%60} minutes and {int(quit[user]-time.time())%60} seconds**""")
 
-        elif message.content.lower() == '|work prositute':
+        elif message.content.lower() == '|work architect':
             if getjob(user)[0] == 0 and getquit(user) < time.time():
-                setjob(user, 3, 0)
-                setsalary(user, 180)
-                await message.channel.send("Congratulations! You are now working as a prostitute!")
+                setjob(user, 3, 0, 4)
+                setsalary(user, 1650)
+                await message.channel.send("Congratulations! You are now working as a architect!")
             elif getjob(user)[0] != 0:
                 await message.channel.send("You already work a job. You have to '|work quit' your current job and wait 12 hours to work this job.")
             elif getquit(user) > time.time():
@@ -340,7 +351,7 @@ async def on_message(message):
 
         elif message.content.lower() == '|work nuclear scientist':
             if getjob(user)[0] == 0 and getquit(user) < time.time():
-                setjob(user, 4, 0)
+                setjob(user, 4, 0, 5)
                 setsalary(user, 2150)
                 await message.channel.send("Congratulations! You are now working as a nuclear scientist!")
             elif getjob(user)[0] != 0:
@@ -350,7 +361,7 @@ async def on_message(message):
 
         elif message.content.lower() == '|work covid-19 analyst':
             if getjob(user)[0] == 0 and getquit(user) < time.time():
-                setjob(user, 5, 0)
+                setjob(user, 5, 0, 6)
                 setsalary(user, 2325)
                 await message.channel.send("Congratulations! You are now working as a COVID-19 Analyst! Note: This job is exclusive and only temporary; once this job is deleted after long notice, you will be fired and will have to wait 12 hours to apply for another job.")
             elif getjob(user)[0] != 0:
@@ -360,7 +371,7 @@ async def on_message(message):
 
         elif message.content == '|work quit':
             if getjob(user)[0] != 0:
-                setjob(user, 0, 0)
+                setjob(user, 0, 0, 0)
                 setwork(user, 0)
                 setsalary(user, 0)
                 quit[user] = time.time() + 43200
@@ -371,18 +382,22 @@ async def on_message(message):
         elif message.content == '|work':
             #1 = Fast food worker
             #2 = Firefighter
-            #3 = Prostitute (!)
+            #3 = Architect
             #4 = Nuclear scientist
             #5 = COVID - 19 Analyst
             if getjob(user)[0] == 0:
                 await message.channel.send('You need to have a job to work. Try "|jobs" and do "|work *job*" to apply for the job you want to apply for.')
-            if getjob(user)[0] != 0 and (user in work) and work[user] > time.time():
+            elif getjob(user)[0] != 0 and (user in work) and work[user] > time.time():
                 await message.channel.send(f"""You need to wait **{int((work[user]-time.time())/60)%60} minutes and {int(work[user]-time.time())%60} seconds** before you could work again""")
+            elif getjob(user)[1] == getjob(user)[2]:
+                await message.channel.send(f"""You already worked the maximum amount of hours today!""")
             else:
-                await message.channel.send(f"""You successfully worked and got {str(getsalary(user))} Discs!""")
-                setjob(user, None, getjob(user)[1]+1)
+                await message.channel.send(f"""You successfully worked and got **{str(getsalary(user))} Discs**!""")
+                setjob(user, None, getjob(user)[1]+1, None)
                 work[user] = time.time() + 3600
                 setdiscs(user, getdiscs(user)+getsalary(user))
+                if getjob(user)[1] == getjob(user)[2]:
+                    await message.channel.send(f"""*Note: You have now worked the maximum amount of times you can have worked today.*""")
         
         elif message.content == '🔥':
             if getfire(user) >= time.time():
@@ -468,7 +483,7 @@ async def on_message(message):
             if amount > getdiscs(user):
                 await message.channel.send(f"""You don't have enough discs, simpleton. You need {amount-getdiscs(user)} more discs to successfully share 'em.""")
             elif amount < 0:
-                await message.channel.send("Can't rob. Sorry.")
+                await message.channel.send("Can't rob.")
                 return
             else:
                 setdiscs(target, getdiscs(target)+amount)
@@ -561,15 +576,15 @@ async def on_message(message):
         elif message.content.lower() == '|pet list':
             embed = discord.Embed(title = 'Available Beatboxer Pets', description = 'These furry sensations can be cute, help you substantially in the currency, and play with you like its best friend!', color = 0x9e674c)
             embed.set_thumbnail(url = "https://imgflip.com/s/meme/Advice-Doge.jpg")
-            embed.add_field(name = '**Pet Blue Ball**', value = '5500 Discs')
-            embed.add_field(name = '**Pet Shrub**', value = '9500 Discs')
-            embed.add_field(name = '**Pet Cat**', value = '15500 Discs')
-            embed.add_field(name = '**Pet Dog**', value = '16000 Discs')
-            embed.add_field(name = '**Pet Parrot**', value = '31500 Discs')
-            embed.add_field(name = '**Pet Bear**', value = '75000 Discs')
-            embed.add_field(name = '**Pet Tiger**', value = '185000 Discs')
-            embed.add_field(name = '**Pet Computer**', value = '355000 Discs')
-            embed.add_field(name = '**Pet DJ** (No, this is *not* slavery)', value = '725000 Discs')
+            embed.add_field(name = '**Blue Ball**', value = '5500 Discs')
+            embed.add_field(name = '**Shrub**', value = '9500 Discs')
+            embed.add_field(name = '**Cat**', value = '15500 Discs')
+            embed.add_field(name = '**Dog**', value = '16000 Discs')
+            embed.add_field(name = '**Parrot**', value = '31500 Discs')
+            embed.add_field(name = '**Bear**', value = '75000 Discs')
+            embed.add_field(name = '**Tiger**', value = '185000 Discs')
+            embed.add_field(name = '**Computer**', value = '355000 Discs')
+            embed.add_field(name = '**Beatboxer** (No, this is *not* slavery)', value = '725000 Discs')
             await message.channel.send(embed = embed)
 
         elif message.content.lower() == '|pet buy blue ball':
@@ -833,7 +848,12 @@ async def on_message(message):
                         await message.channel.send(f"""**Restaurant:** You got **{number} Discs** while searching the booths and tables with your pet.""")
                     setdiscs(user, getdiscs(user)+number)
                     setsearch(user, time.time()+30)
+        if message.content.startswith("|configurationrank"):
+            client_configuration_rank = int(client_configuration_rank)
+            configuration_ranks.append(client_configuration_rank)
+            print(configuration_ranks)
 
     save_all()
 
+client.loop.create_task(reset_job_today())
 client.run(token)
